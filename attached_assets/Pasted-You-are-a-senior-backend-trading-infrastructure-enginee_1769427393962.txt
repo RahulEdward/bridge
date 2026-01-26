@@ -1,0 +1,142 @@
+You are a senior backend + trading infrastructure engineer.
+
+Objective:
+Build a VPS-hosted execution gateway that connects my SaaS app (FastAPI backend on Render, Next.js frontend) with MetaTrader 5 (MT5) trading accounts.
+
+This gateway must behave like a self-hosted MetaApi alternative.
+
+IMPORTANT CONSTRAINTS (DO NOT VIOLATE):
+- MT5 cannot run on Render
+- MT5 will run only on a Windows VPS
+- One MT5 terminal = one trading account (NO multi-account per terminal)
+- Users must NEVER manage VPS or MT5 themselves
+- My SaaS app controls everything remotely
+- No third-party paid MT5 APIs (MetaApi, etc.)
+
+--------------------------------------------------
+SYSTEM OVERVIEW
+--------------------------------------------------
+
+Architecture:
+
+[ SaaS App on Render ]
+- FastAPI (AI logic, strategy, auth, billing)
+- Next.js frontend (UI)
+
+        |
+        | HTTPS (secure, API key based)
+        v
+
+[ VPS – Execution Layer ]
+- Central Gateway App (this project)
+- One or more MT5 terminals
+- One bridge per MT5 terminal
+
+--------------------------------------------------
+WHAT THIS VPS APP MUST DO
+--------------------------------------------------
+
+This VPS app is NOT a trading strategy app.
+It is ONLY an execution + data gateway.
+
+Core responsibilities:
+
+1. Accept authenticated HTTPS requests from Render backend
+2. Manage MT5 terminals lifecycle:
+   - Create MT5 instance per user account
+   - Login to broker using credentials sent from SaaS
+   - Start / stop / restart MT5 safely
+3. Bridge communication between MT5 and SaaS:
+   - Fetch account info (balance, equity, margin)
+   - Fetch open positions and orders
+   - Fetch market data (ticks / candles)
+   - Place, modify, and close orders
+4. Route requests correctly:
+   - User → Account → MT5 instance
+5. Handle failures:
+   - MT5 freeze or crash → auto restart
+   - Broker disconnect → retry and report status
+6. Expose a clean REST + optional WebSocket API
+   - SaaS must NOT know internal MT5 details
+
+--------------------------------------------------
+TECHNICAL REQUIREMENTS
+--------------------------------------------------
+
+VPS:
+- Windows VPS (mandatory)
+- MT5 terminals installed in isolated folders
+- Gateway app runs as background service
+
+MT5 Side:
+- One MT5 terminal per user account
+- Either:
+  a) Python MetaTrader5 bridge (1 process per terminal)
+  OR
+  b) MQL5 Expert Advisor + socket bridge
+- Local communication only (localhost)
+
+Gateway App:
+- Language: Python preferred
+- Framework: FastAPI or equivalent
+- Stateless API design
+- Config-driven account provisioning
+
+Security:
+- API key authentication (Render → VPS)
+- No direct public MT5 access
+- Encrypted storage of MT5 credentials
+- IP allowlist (Render IPs only)
+
+--------------------------------------------------
+REQUIRED API ENDPOINTS (DESIGN ONLY)
+--------------------------------------------------
+
+/health
+/account/create
+/account/status
+/account/info
+/market/candles
+/market/ticks
+/trade/place
+/trade/close
+/trade/modify
+
+(Exact naming can vary, but functionality must exist)
+
+--------------------------------------------------
+SCALING RULES (VERY IMPORTANT)
+--------------------------------------------------
+
+- One MT5 terminal = one user account
+- One bridge process per MT5 terminal
+- Multiple MT5 terminals can run on same VPS (RAM dependent)
+- System must support adding more VPS nodes later
+
+--------------------------------------------------
+WHAT NOT TO DO
+--------------------------------------------------
+
+- Do NOT try to run MT5 on Linux or Render
+- Do NOT share one MT5 terminal between users
+- Do NOT mix strategy logic into gateway
+- Do NOT expose MT5 directly to frontend
+- Do NOT assume MT5 is stable (it will crash)
+
+--------------------------------------------------
+DELIVERABLES EXPECTED FROM YOU
+--------------------------------------------------
+
+1. High-level architecture explanation
+2. VPS folder & process structure
+3. MT5 lifecycle management logic
+4. Request routing logic (user → MT5)
+5. Failure handling & restart strategy
+6. Security model explanation
+7. Clear explanation of how SaaS integrates with this gateway
+
+IMPORTANT:
+- Focus on correctness and production realism
+- Prefer clarity over shortcuts
+- Do NOT oversimplify MT5 limitations
+- Assume this system will be used for real money trading
