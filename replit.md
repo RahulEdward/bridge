@@ -3,6 +3,15 @@
 ## Overview
 A VPS-hosted execution gateway that connects a SaaS application (FastAPI backend on Render, Next.js frontend) with MetaTrader 5 (MT5) trading accounts. This acts as a self-hosted MetaApi alternative.
 
+## Admin Panel
+Access the admin panel at `/` or `/admin`:
+- View system health and resource usage
+- Monitor connected MT5 accounts
+- Add new trading accounts
+- View open positions
+- Restart/stop accounts
+- Auto-refreshes every 10 seconds
+
 ## Architecture
 
 ```
@@ -22,11 +31,14 @@ A VPS-hosted execution gateway that connects a SaaS application (FastAPI backend
 
 ```
 ├── main.py                 # FastAPI application entry point
+├── static/
+│   └── admin.html          # Admin panel UI
 ├── src/
 │   ├── config.py           # Configuration and settings
 │   ├── models.py           # Pydantic models for requests/responses
 │   ├── security.py         # API key authentication and IP allowlist
-│   ├── mt5_bridge.py       # MT5 communication layer
+│   ├── mt5_bridge.py       # MT5 communication layer (mock/dev)
+│   ├── mt5_bridge_windows.py # Real MT5 bridge (Windows only)
 │   ├── terminal_manager.py # MT5 lifecycle management
 │   └── routes/
 │       ├── health.py       # Health check endpoints
@@ -34,6 +46,9 @@ A VPS-hosted execution gateway that connects a SaaS application (FastAPI backend
 │       ├── market.py       # Market data endpoints
 │       ├── trade.py        # Trading endpoints
 │       └── websocket.py    # WebSocket for real-time data
+├── docs/                   # Documentation
+│   ├── DEPLOYMENT.md       # Windows VPS deployment guide
+│   └── API_REFERENCE.md    # Complete API reference
 ├── data/                   # Runtime data storage
 └── .env.example            # Environment configuration template
 ```

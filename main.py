@@ -2,6 +2,8 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from src.config import settings, validate_production_settings
 from src.terminal_manager import terminal_manager
@@ -52,9 +54,21 @@ app.include_router(market.router)
 app.include_router(trade.router)
 app.include_router(websocket.router)
 
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 
 @app.get("/")
 async def root():
+    return FileResponse("static/admin.html")
+
+
+@app.get("/admin")
+async def admin_panel():
+    return FileResponse("static/admin.html")
+
+
+@app.get("/api")
+async def api_info():
     return {
         "name": settings.app_name,
         "version": settings.version,

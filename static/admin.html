@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MT5 Gateway Admin</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%);
+            padding: 20px 30px;
+            border-bottom: 1px solid #334155;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            font-size: 24px;
+            color: #38bdf8;
+        }
+        .status-badge {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .status-healthy {
+            background: #064e3b;
+            color: #34d399;
+        }
+        .status-error {
+            background: #7f1d1d;
+            color: #fca5a5;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 30px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid #334155;
+        }
+        .stat-card h3 {
+            color: #94a3b8;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        .stat-card .value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #38bdf8;
+        }
+        .stat-card .unit {
+            font-size: 14px;
+            color: #64748b;
+        }
+        .section {
+            background: #1e293b;
+            border-radius: 12px;
+            border: 1px solid #334155;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        .section-header {
+            padding: 16px 20px;
+            background: #0f172a;
+            border-bottom: 1px solid #334155;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .section-header h2 {
+            font-size: 18px;
+            color: #f1f5f9;
+        }
+        .section-content {
+            padding: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #334155;
+        }
+        th {
+            color: #94a3b8;
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+        td {
+            color: #e2e8f0;
+        }
+        .account-status {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .status-connected {
+            background: #064e3b;
+            color: #34d399;
+        }
+        .status-disconnected {
+            background: #7f1d1d;
+            color: #fca5a5;
+        }
+        .status-starting {
+            background: #78350f;
+            color: #fbbf24;
+        }
+        .btn {
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+        .btn-success {
+            background: #22c55e;
+            color: white;
+        }
+        .btn-sm {
+            padding: 4px 10px;
+            font-size: 12px;
+        }
+        .actions {
+            display: flex;
+            gap: 8px;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #64748b;
+        }
+        .resource-bar {
+            height: 8px;
+            background: #334155;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        .resource-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s;
+        }
+        .bar-green { background: #22c55e; }
+        .bar-yellow { background: #eab308; }
+        .bar-red { background: #ef4444; }
+        .refresh-btn {
+            background: transparent;
+            border: 1px solid #334155;
+            color: #94a3b8;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .refresh-btn:hover {
+            background: #334155;
+        }
+        .position-profit {
+            font-weight: 600;
+        }
+        .profit-positive { color: #22c55e; }
+        .profit-negative { color: #ef4444; }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal.active {
+            display: flex;
+        }
+        .modal-content {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 30px;
+            width: 90%;
+            max-width: 500px;
+            border: 1px solid #334155;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            font-size: 24px;
+            cursor: pointer;
+        }
+        .form-group {
+            margin-bottom: 16px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #94a3b8;
+            font-size: 14px;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background: #0f172a;
+            color: #e2e8f0;
+            font-size: 14px;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+        .last-updated {
+            color: #64748b;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>MT5 Gateway Admin</h1>
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <span class="last-updated" id="lastUpdated">Last updated: --</span>
+            <button class="refresh-btn" onclick="refreshData()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                </svg>
+                Refresh
+            </button>
+            <span class="status-badge status-healthy" id="systemStatus">Healthy</span>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Active Accounts</h3>
+                <div class="value" id="activeAccounts">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Total Accounts</h3>
+                <div class="value" id="totalAccounts">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Uptime</h3>
+                <div class="value" id="uptime">0</div>
+                <span class="unit">seconds</span>
+            </div>
+            <div class="stat-card">
+                <h3>Version</h3>
+                <div class="value" id="version" style="font-size: 24px;">--</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-header">
+                <h2>System Resources</h2>
+            </div>
+            <div class="section-content">
+                <div class="stats-grid">
+                    <div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>CPU</span>
+                            <span id="cpuPercent">0%</span>
+                        </div>
+                        <div class="resource-bar">
+                            <div class="resource-bar-fill bar-green" id="cpuBar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>Memory</span>
+                            <span id="memoryPercent">0%</span>
+                        </div>
+                        <div class="resource-bar">
+                            <div class="resource-bar-fill bar-green" id="memoryBar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>Disk</span>
+                            <span id="diskPercent">0%</span>
+                        </div>
+                        <div class="resource-bar">
+                            <div class="resource-bar-fill bar-green" id="diskBar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-header">
+                <h2>Connected Accounts</h2>
+                <button class="btn btn-primary" onclick="showAddAccountModal()">+ Add Account</button>
+            </div>
+            <div class="section-content">
+                <table id="accountsTable">
+                    <thead>
+                        <tr>
+                            <th>Account ID</th>
+                            <th>Login</th>
+                            <th>Server</th>
+                            <th>Status</th>
+                            <th>Connected</th>
+                            <th>Restarts</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="accountsBody">
+                        <tr>
+                            <td colspan="7" class="empty-state">No accounts connected</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="section" id="positionsSection" style="display: none;">
+            <div class="section-header">
+                <h2>Open Positions - <span id="positionsAccount"></span></h2>
+                <button class="btn btn-primary btn-sm" onclick="hidePositions()">Close</button>
+            </div>
+            <div class="section-content">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Ticket</th>
+                            <th>Symbol</th>
+                            <th>Type</th>
+                            <th>Volume</th>
+                            <th>Open Price</th>
+                            <th>Current</th>
+                            <th>SL</th>
+                            <th>TP</th>
+                            <th>Profit</th>
+                        </tr>
+                    </thead>
+                    <tbody id="positionsBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="addAccountModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add New Account</h2>
+                <button class="modal-close" onclick="hideAddAccountModal()">&times;</button>
+            </div>
+            <form id="addAccountForm" onsubmit="addAccount(event)">
+                <div class="form-group">
+                    <label>Account ID</label>
+                    <input type="text" name="account_id" required placeholder="e.g., user_123">
+                </div>
+                <div class="form-group">
+                    <label>Broker Server</label>
+                    <input type="text" name="broker_server" required placeholder="e.g., ICMarkets-Demo">
+                </div>
+                <div class="form-group">
+                    <label>Login</label>
+                    <input type="number" name="login" required placeholder="e.g., 12345678">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" name="password" required>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">Connect Account</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_KEY = '';
+        
+        async function fetchAPI(endpoint, options = {}) {
+            const headers = {
+                'Content-Type': 'application/json',
+                ...options.headers
+            };
+            if (API_KEY) {
+                headers['X-API-Key'] = API_KEY;
+            }
+            
+            const response = await fetch(endpoint, { ...options, headers });
+            return response.json();
+        }
+
+        function getBarColor(percent) {
+            if (percent < 60) return 'bar-green';
+            if (percent < 85) return 'bar-yellow';
+            return 'bar-red';
+        }
+
+        function formatUptime(seconds) {
+            if (seconds < 60) return seconds;
+            if (seconds < 3600) return Math.floor(seconds / 60) + 'm';
+            if (seconds < 86400) return Math.floor(seconds / 3600) + 'h';
+            return Math.floor(seconds / 86400) + 'd';
+        }
+
+        async function refreshData() {
+            try {
+                const health = await fetchAPI('/health/detailed');
+                
+                document.getElementById('activeAccounts').textContent = health.active_accounts || 0;
+                document.getElementById('totalAccounts').textContent = health.total_accounts || 0;
+                document.getElementById('uptime').textContent = formatUptime(health.uptime_seconds || 0);
+                document.getElementById('version').textContent = health.version || '--';
+                
+                const resources = health.system_resources || {};
+                const cpu = resources.cpu_percent || 0;
+                const mem = resources.memory_percent || 0;
+                const disk = resources.disk_percent || 0;
+                
+                document.getElementById('cpuPercent').textContent = cpu.toFixed(1) + '%';
+                document.getElementById('cpuBar').style.width = cpu + '%';
+                document.getElementById('cpuBar').className = 'resource-bar-fill ' + getBarColor(cpu);
+                
+                document.getElementById('memoryPercent').textContent = mem.toFixed(1) + '%';
+                document.getElementById('memoryBar').style.width = mem + '%';
+                document.getElementById('memoryBar').className = 'resource-bar-fill ' + getBarColor(mem);
+                
+                document.getElementById('diskPercent').textContent = disk.toFixed(1) + '%';
+                document.getElementById('diskBar').style.width = disk + '%';
+                document.getElementById('diskBar').className = 'resource-bar-fill ' + getBarColor(disk);
+                
+                const accounts = health.accounts || [];
+                renderAccounts(accounts);
+                
+                document.getElementById('systemStatus').textContent = 'Healthy';
+                document.getElementById('systemStatus').className = 'status-badge status-healthy';
+                document.getElementById('lastUpdated').textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+                
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                document.getElementById('systemStatus').textContent = 'Error';
+                document.getElementById('systemStatus').className = 'status-badge status-error';
+            }
+        }
+
+        function renderAccounts(accounts) {
+            const tbody = document.getElementById('accountsBody');
+            
+            if (accounts.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No accounts connected</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = accounts.map(acc => `
+                <tr>
+                    <td>${acc.account_id}</td>
+                    <td>${acc.login}</td>
+                    <td>${acc.server}</td>
+                    <td><span class="account-status status-${acc.status}">${acc.status}</span></td>
+                    <td>${acc.connected_at ? new Date(acc.connected_at).toLocaleString() : '-'}</td>
+                    <td>${acc.restart_count}</td>
+                    <td class="actions">
+                        <button class="btn btn-primary btn-sm" onclick="viewPositions('${acc.account_id}')">Positions</button>
+                        <button class="btn btn-success btn-sm" onclick="restartAccount('${acc.account_id}')">Restart</button>
+                        <button class="btn btn-danger btn-sm" onclick="stopAccount('${acc.account_id}')">Stop</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function viewPositions(accountId) {
+            try {
+                const data = await fetchAPI(`/account/positions/${accountId}`);
+                document.getElementById('positionsAccount').textContent = accountId;
+                
+                const tbody = document.getElementById('positionsBody');
+                if (data.positions.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No open positions</td></tr>';
+                } else {
+                    tbody.innerHTML = data.positions.map(p => `
+                        <tr>
+                            <td>${p.ticket}</td>
+                            <td>${p.symbol}</td>
+                            <td>${p.type}</td>
+                            <td>${p.volume}</td>
+                            <td>${p.open_price}</td>
+                            <td>${p.current_price}</td>
+                            <td>${p.sl || '-'}</td>
+                            <td>${p.tp || '-'}</td>
+                            <td class="position-profit ${p.profit >= 0 ? 'profit-positive' : 'profit-negative'}">
+                                ${p.profit >= 0 ? '+' : ''}${p.profit.toFixed(2)}
+                            </td>
+                        </tr>
+                    `).join('');
+                }
+                
+                document.getElementById('positionsSection').style.display = 'block';
+            } catch (error) {
+                alert('Error fetching positions: ' + error.message);
+            }
+        }
+
+        function hidePositions() {
+            document.getElementById('positionsSection').style.display = 'none';
+        }
+
+        async function restartAccount(accountId) {
+            if (!confirm(`Restart account ${accountId}?`)) return;
+            
+            try {
+                await fetchAPI(`/account/restart/${accountId}`, { method: 'POST' });
+                refreshData();
+            } catch (error) {
+                alert('Error restarting account: ' + error.message);
+            }
+        }
+
+        async function stopAccount(accountId) {
+            if (!confirm(`Stop account ${accountId}?`)) return;
+            
+            try {
+                await fetchAPI(`/account/stop/${accountId}`, { method: 'POST' });
+                refreshData();
+            } catch (error) {
+                alert('Error stopping account: ' + error.message);
+            }
+        }
+
+        function showAddAccountModal() {
+            document.getElementById('addAccountModal').classList.add('active');
+        }
+
+        function hideAddAccountModal() {
+            document.getElementById('addAccountModal').classList.remove('active');
+            document.getElementById('addAccountForm').reset();
+        }
+
+        async function addAccount(event) {
+            event.preventDefault();
+            const form = event.target;
+            const data = {
+                account_id: form.account_id.value,
+                broker_server: form.broker_server.value,
+                login: parseInt(form.login.value),
+                password: form.password.value,
+                investor_mode: false
+            };
+            
+            try {
+                await fetchAPI('/account/create', {
+                    method: 'POST',
+                    body: JSON.stringify(data)
+                });
+                hideAddAccountModal();
+                refreshData();
+            } catch (error) {
+                alert('Error creating account: ' + error.message);
+            }
+        }
+
+        refreshData();
+        setInterval(refreshData, 10000);
+    </script>
+</body>
+</html>
