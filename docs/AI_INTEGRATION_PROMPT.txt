@@ -1,0 +1,55 @@
+You are an expert full-stack developer. I have a running MT5 Execution Gateway on a Windows VPS that controls MetaTrader 5 trading accounts via REST API. Integrate this gateway into my app completely.
+
+Gateway Base URL: http://<VPS_IP>:5000
+Auth Header: X-API-Key: test-api-key-12345
+
+API Endpoints:
+
+GET  /health                              → gateway status (no auth)
+GET  /account/info/{account_id}           → balance, equity, margin, currency, leverage
+GET  /account/positions/{account_id}      → open positions
+GET  /account/orders/{account_id}         → pending orders
+GET  /account/status/{account_id}         → connection status (connected/starting/error)
+POST /account/create                      → add new MT5 account
+POST /account/restart/{account_id}        → restart account
+POST /account/stop/{account_id}           → stop account
+POST /trade/place                         → place order
+POST /trade/close                         → close position
+POST /trade/modify                        → modify SL/TP
+GET  /market/candles/{account_id}?symbol=EURUSD&timeframe=H1&count=100
+GET  /market/ticks/{account_id}?symbol=EURUSD
+WS   /ws/{account_id}?api_key=test-api-key-12345  → real-time updates
+
+Request/Response examples:
+
+POST /account/create body:
+{"account_id":"user_123","broker_server":"MetaQuotes-Demo","login":12345678,"password":"pass","investor_mode":false}
+
+POST /trade/place body:
+{"account_id":"user_123","symbol":"EURUSD","order_type":"buy","volume":0.01,"sl":null,"tp":null}
+order_type options: buy, sell, buy_limit, sell_limit, buy_stop, sell_stop
+
+POST /trade/close body:
+{"account_id":"user_123","ticket":123456789}
+
+POST /trade/modify body:
+{"account_id":"user_123","ticket":123456789,"sl":1.0800,"tp":1.0950}
+
+WebSocket server sends every second:
+{"type":"account_update","data":{"balance":10000,"equity":10250,"margin":500,"free_margin":9750,"positions_count":2}}
+
+Now do the following for my app:
+
+1. Create a gateway client/service file with all API calls wrapped in clean async functions with proper error handling
+2. Create server-side API routes (never expose API key to browser)
+3. Use environment variables GATEWAY_URL and GATEWAY_API_KEY
+4. Create a dashboard showing: account balance, equity, open positions table with close button
+5. Create a trade form: symbol input, buy/sell buttons, volume, SL, TP
+6. Add real-time balance/equity updates via WebSocket
+7. Add account management: add new account form, show all accounts with status badges
+8. Handle all error states: loading, error, disconnected
+
+My app stack: [WRITE YOUR STACK HERE — e.g. Next.js 14 App Router TypeScript / FastAPI Python]
+
+My project structure:
+[PASTE YOUR FOLDER STRUCTURE HERE]

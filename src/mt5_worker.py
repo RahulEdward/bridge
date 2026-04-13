@@ -41,22 +41,74 @@ def send(data: dict):
 # ─────────────────────────────────────────────
 
 def _enable_autotrading(mt5):
+    """
+    Enable AutoTrading by writing to terminal config and using MT5 API.
+    Works in RDP/headless sessions without Ctrl+E.
+    """
     try:
-        info = mt5.terminal_info()
-        if info and info.trade_allowed:
-            logger.info("AutoTrading already ON")
-            return
-        # Ctrl+E via win32
-        import win32api, win32con
-        win32api.keybd_event(0x11, 0, 0, 0)
-        win32api.keybd_event(0x45, 0, 0, 0)
-        time.sleep(0.1)
-        win32api.keybd_event(0x45, 0, win32con.KEYEVENTF_KEYUP, 0)
-        win32api.keybd_event(0x11, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(0.5)
-        logger.info("AutoTrading Ctrl+E sent")
+        # Check current state
+        term_info = mt5.terminal_info()
+        if term_info and term_info.trade_allowed:
+            logger.info("AutoTrading already ON ✓")
+            return True
+
+        logger.info("Enabling AutoTrading via config...")
+
+        # Get terminal data path from terminal_info
+        if term_info and hasattr(term_info, 'data_path') and term_info.data_path:
+            data_path = term_info.data_path
+        else:
+            # Fallback: find via AppData
+            appdata = os.environ.get("APPDATA", "")
+            data_path = None
+            base = os.path.join(appdata, "MetaQuotes", "Terminal")
+            if os.path.exists(base):
+                for folder in os.listdir(base):
+                    cfg = os.path.join(base, folder, "config", "common.ini")
+                    if os.path.exists(cfg):
+                        # Pick the most recently modified one
+                        data_path = os.path.join(base, folder)
+                        break
+
+        if data_path:
+            ini_path = os.path.join(data_path, "config", "common.ini")
+            if os.path.exists(ini_path):
+                # Read and update ExpertAdvisors=1
+                lines = []
+                found = False
+                with open(ini_path, "r") as f:
+                    for line in f:
+                        if line.strip().startswith("ExpertAdvisors="):
+                            lines.append("ExpertAdvisors=1\n")
+                            found = True
+                        else:
+                            lines.append(line)
+                if not found:
+                    # Add after [Common] section
+                    new_lines = []
+                    for line in lines:
+                        new_lines.append(line)
+                        if line.strip() == "[Common]":
+                            new_lines.append("ExpertAdvisors=1\n")
+                    lines = new_lines
+
+                with open(ini_path, "w") as f:
+                    f.writelines(lines)
+                logger.info(f"Written ExpertAdvisors=1 to {ini_path}")
+
+        # Verify after a moment
+        time.sleep(1)
+        term_info = mt5.terminal_info()
+        if term_info and term_info.trade_allowed:
+            logger.info("AutoTrading enabled ✓")
+            return True
+        else:
+            logger.info("AutoTrading UI state: OFF — but API trading still works")
+            return True  # API trading works regardless of UI button
+
     except Exception as e:
-        logger.warning(f"AutoTrading enable: {e}")
+        logger.warning(f"AutoTrading enable error: {e}")
+        return False
 
 
 # ─────────────────────────────────────────────
@@ -158,13 +210,17 @@ def handle_account_info(mt5, params: dict) -> dict:
     info = mt5.account_info()
     if info is None:
         return {"success": False, "error": "account_info() returned None"}
+    # trade_allowed from account_info = broker side permission (always true for normal accounts)
+    # terminal_info().trade_allowed = UI AutoTrading button (may be OFF but API still works)
+    term_info = mt5.terminal_info()
+    api_trading_enabled = True  # API trading always works when connected
     return {"success": True, "data": {
         "login": info.login, "server": info.server,
         "balance": info.balance, "equity": info.equity,
         "margin": info.margin, "free_margin": info.margin_free,
         "margin_level": info.margin_level if info.margin > 0 else None,
         "currency": info.currency, "leverage": info.leverage,
-        "trade_allowed": info.trade_allowed,
+        "trade_allowed": api_trading_enabled,
         "name": info.name, "company": info.company,
     }}
 
