@@ -16,14 +16,18 @@ logger = logging.getLogger(__name__)
 
 if sys.platform == "win32":
     try:
+        import MetaTrader5
         from src.mt5_bridge_windows import MT5Bridge
         logger.info("Using Windows MT5 Bridge with real MetaTrader5 integration")
+        _USING_REAL_BRIDGE = True
     except ImportError:
         logger.warning("MetaTrader5 package not installed - falling back to mock bridge")
         from src.mt5_bridge import MT5Bridge
+        _USING_REAL_BRIDGE = False
 else:
     logger.info("Non-Windows platform detected - using mock MT5 Bridge for development")
     from src.mt5_bridge import MT5Bridge
+    _USING_REAL_BRIDGE = False
 
 from src.mt5_bridge import MT5Connection
 
@@ -86,6 +90,12 @@ class MT5TerminalManager:
                         )
                         self._accounts[config.account_id] = config
                         logger.info(f"Loaded account config: {config.account_id}")
+                    
+                    # Auto-start all accounts on startup
+                    for acc_data in data:
+                        account_id = acc_data["account_id"]
+                        logger.info(f"Auto-starting account: {account_id}")
+                        asyncio.create_task(self._start_account_async(account_id, password=None))
             except Exception as e:
                 logger.error(f"Failed to load accounts: {e}")
     
