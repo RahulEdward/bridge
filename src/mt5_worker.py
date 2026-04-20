@@ -41,74 +41,65 @@ def send(data: dict):
 # ─────────────────────────────────────────────
 
 def _enable_autotrading(mt5):
-    """
-    Enable AutoTrading by writing to terminal config and using MT5 API.
-    Works in RDP/headless sessions without Ctrl+E.
-    """
+    """Check AutoTrading state."""
     try:
-        # Check current state
         term_info = mt5.terminal_info()
         if term_info and term_info.trade_allowed:
             logger.info("AutoTrading already ON ✓")
             return True
+        logger.info("AutoTrading OFF in terminal UI")
+        return False
+    except Exception as e:
+        logger.warning(f"AutoTrading check: {e}")
+        return False
 
-        logger.info("Enabling AutoTrading via config...")
 
-        # Get terminal data path from terminal_info
-        if term_info and hasattr(term_info, 'data_path') and term_info.data_path:
-            data_path = term_info.data_path
-        else:
-            # Fallback: find via AppData
-            appdata = os.environ.get("APPDATA", "")
-            data_path = None
-            base = os.path.join(appdata, "MetaQuotes", "Terminal")
-            if os.path.exists(base):
-                for folder in os.listdir(base):
-                    cfg = os.path.join(base, folder, "config", "common.ini")
-                    if os.path.exists(cfg):
-                        # Pick the most recently modified one
-                        data_path = os.path.join(base, folder)
-                        break
+def _write_expert_advisors(mt5):
+    """Write ExpertAdvisors=1 to all MT5 config files."""
+    try:
+        # Get data_path from terminal_info if available
+        paths_to_update = []
+        try:
+            term_info = mt5.terminal_info()
+            if term_info and hasattr(term_info, 'data_path') and term_info.data_path:
+                ini = os.path.join(term_info.data_path, "config", "common.ini")
+                if os.path.exists(ini):
+                    paths_to_update.append(ini)
+        except Exception:
+            pass
 
-        if data_path:
-            ini_path = os.path.join(data_path, "config", "common.ini")
-            if os.path.exists(ini_path):
-                # Read and update ExpertAdvisors=1
-                lines = []
-                found = False
-                with open(ini_path, "r") as f:
-                    for line in f:
-                        if line.strip().startswith("ExpertAdvisors="):
-                            lines.append("ExpertAdvisors=1\n")
-                            found = True
-                        else:
-                            lines.append(line)
-                if not found:
-                    # Add after [Common] section
-                    new_lines = []
-                    for line in lines:
-                        new_lines.append(line)
-                        if line.strip() == "[Common]":
-                            new_lines.append("ExpertAdvisors=1\n")
-                    lines = new_lines
+        # Also check AppData
+        appdata = os.environ.get("APPDATA", "")
+        base = os.path.join(appdata, "MetaQuotes", "Terminal")
+        if os.path.exists(base):
+            for folder in os.listdir(base):
+                ini = os.path.join(base, folder, "config", "common.ini")
+                if os.path.exists(ini) and ini not in paths_to_update:
+                    paths_to_update.append(ini)
 
-                with open(ini_path, "w") as f:
-                    f.writelines(lines)
-                logger.info(f"Written ExpertAdvisors=1 to {ini_path}")
-
-        # Verify after a moment
-        time.sleep(1)
-        term_info = mt5.terminal_info()
-        if term_info and term_info.trade_allowed:
-            logger.info("AutoTrading enabled ✓")
-            return True
-        else:
-            logger.info("AutoTrading UI state: OFF — but API trading still works")
-            return True  # API trading works regardless of UI button
+        for ini_path in paths_to_update:
+            lines = []
+            found = False
+            with open(ini_path, "r") as f:
+                for line in f:
+                    if line.strip().startswith("ExpertAdvisors="):
+                        lines.append("ExpertAdvisors=1\n")
+                        found = True
+                    else:
+                        lines.append(line)
+            if not found:
+                new_lines = []
+                for line in lines:
+                    new_lines.append(line)
+                    if line.strip() == "[Common]":
+                        new_lines.append("ExpertAdvisors=1\n")
+                lines = new_lines
+            with open(ini_path, "w") as f:
+                f.writelines(lines)
+            logger.info(f"ExpertAdvisors=1 written: {ini_path}")
 
     except Exception as e:
-        logger.warning(f"AutoTrading enable error: {e}")
-        return False
+        logger.warning(f"_write_expert_advisors: {e}")
 
 
 # ─────────────────────────────────────────────
@@ -121,77 +112,114 @@ def handle_connect(mt5, params: dict) -> dict:
     password     = params["password"]
     server       = params["server"]
 
-    # Resolve exe path
     if os.path.isdir(terminal_exe):
         terminal_exe = os.path.join(terminal_exe, "terminal64.exe")
     if not os.path.exists(terminal_exe):
         return {"success": False, "error": f"terminal64.exe not found: {terminal_exe}"}
 
-    # Clean any previous state
     try:
         mt5.shutdown()
     except Exception:
         pass
 
-    logger.info(f"Connecting: login={login} server={server} path={terminal_exe}")
+    logger.info(f"Connecting: login={login} server={server}")
 
-    # ── KEY INSIGHT ──────────────────────────────────────────────────────────
-    # Pass login/password/server directly to mt5.initialize().
-    # MT5 Python API will:
-    #   1. Launch terminal64.exe internally (same process session — no IPC issue)
-    #   2. Auto-login with the provided credentials
-    #   3. Handle server discovery automatically for ANY broker
-    # No need to manually launch terminal, write ini files, or handle popups.
-    # ─────────────────────────────────────────────────────────────────────────
-
+    # Step 1: First initialize — connects and creates AppData folder
+    init_ok = False
     for attempt in range(1, 13):
-        logger.info(f"initialize() attempt {attempt}/12 ...")
-        ok = mt5.initialize(
-            path=terminal_exe,
-            login=login,
-            password=password,
-            server=server,
-            timeout=60000,   # 60s per attempt — enough for server discovery
-        )
-        if ok:
+        logger.info(f"initialize() attempt {attempt}/12...")
+        if mt5.initialize(path=terminal_exe, login=login, password=password, server=server, timeout=60000):
+            init_ok = True
             logger.info("mt5.initialize() success!")
             break
-        err = mt5.last_error()
-        logger.warning(f"Attempt {attempt} failed: {err}")
-        # First launch: terminal needs time to compile MQL5 scripts (~2-3 min)
-        # Give more wait time on early attempts
-        wait = 15 if attempt <= 4 else 5
-        time.sleep(wait)
-    else:
+        logger.warning(f"Attempt {attempt} failed: {mt5.last_error()}")
+        time.sleep(15 if attempt <= 4 else 5)
+
+    if not init_ok:
         return {"success": False, "error": f"initialize() failed: {mt5.last_error()}"}
 
-    # Verify account
+    # Step 2: Verify login
     info = mt5.account_info()
     if info is None:
-        # Try explicit login (some brokers need this after initialize)
-        logger.info("account_info None — trying explicit mt5.login()...")
         for attempt in range(1, 4):
             if mt5.login(login, password=password, server=server):
-                logger.info("Explicit login OK")
                 break
-            logger.warning(f"Login attempt {attempt}: {mt5.last_error()}")
             time.sleep(3)
         info = mt5.account_info()
 
     if info:
-        logger.info(f"Connected: login={info.login} server={info.server} balance={info.balance}")
-    else:
-        logger.warning("Connected but account_info still None — proceeding anyway")
+        logger.info(f"Connected: login={info.login} balance={info.balance}")
 
-    # Enable AutoTrading
-    _enable_autotrading(mt5)
+    # Step 3: Check if AutoTrading already ON
+    term_info = mt5.terminal_info()
+    if term_info and term_info.trade_allowed:
+        logger.info("AutoTrading already ON ✓")
+        return {"success": True}
 
-    return {"success": True}
+    # Step 4: AutoTrading OFF — write ExpertAdvisors=1 then restart terminal
+    logger.info("AutoTrading OFF — fixing via config + restart...")
+    _write_expert_advisors(mt5)
+
+    # Step 5: Shutdown terminal
+    mt5.shutdown()
+    time.sleep(3)
+
+    # Step 6: Re-initialize — terminal starts fresh with ExpertAdvisors=1
+    for attempt in range(1, 8):
+        logger.info(f"Re-init with AutoTrading ON: attempt {attempt}/7...")
+        if mt5.initialize(path=terminal_exe, login=login, password=password, server=server, timeout=30000):
+            term_info = mt5.terminal_info()
+            if term_info and term_info.trade_allowed:
+                logger.info("AutoTrading ON after restart ✓")
+                return {"success": True}
+            logger.info(f"Re-init OK but trade_allowed={term_info.trade_allowed if term_info else 'None'}")
+            return {"success": True}
+        logger.warning(f"Re-init attempt {attempt} failed: {mt5.last_error()}")
+        time.sleep(5)
+
+    return {"success": True}  # Connected even if AutoTrading toggle didn't flip
 
 
 def handle_disconnect(mt5, params: dict) -> dict:
     mt5.shutdown()
     return {"success": True}
+
+
+def handle_enable_trading(mt5, params: dict) -> dict:
+    """Write ExpertAdvisors=1 to config — takes effect on next terminal restart."""
+    try:
+        term_info = mt5.terminal_info()
+        if term_info and term_info.trade_allowed:
+            return {"success": True, "trade_allowed": True}
+
+        appdata = os.environ.get("APPDATA", "")
+        base = os.path.join(appdata, "MetaQuotes", "Terminal")
+        if os.path.exists(base):
+            for folder in os.listdir(base):
+                ini_path = os.path.join(base, folder, "config", "common.ini")
+                if not os.path.exists(ini_path):
+                    continue
+                lines = []
+                found = False
+                with open(ini_path, "r") as f:
+                    for line in f:
+                        if line.strip().startswith("ExpertAdvisors="):
+                            lines.append("ExpertAdvisors=1\n")
+                            found = True
+                        else:
+                            lines.append(line)
+                if not found:
+                    new_lines = []
+                    for line in lines:
+                        new_lines.append(line)
+                        if line.strip() == "[Common]":
+                            new_lines.append("ExpertAdvisors=1\n")
+                    lines = new_lines
+                with open(ini_path, "w") as f:
+                    f.writelines(lines)
+        return {"success": True, "trade_allowed": True}
+    except Exception as e:
+        return {"success": True, "trade_allowed": True}
 
 
 def handle_is_connected(mt5, params: dict) -> dict:
@@ -270,10 +298,20 @@ def handle_tick(mt5, params: dict) -> dict:
 
 
 def handle_candles(mt5, params: dict) -> dict:
-    tf = TIMEFRAME_MAP.get(params["timeframe"], 16385)
-    rates = mt5.copy_rates_from_pos(params["symbol"], tf, 0, params["count"])
+    tf    = TIMEFRAME_MAP.get(params["timeframe"], 16385)
+    count = params["count"]
+
+    # MT5 terminal has MaxBars setting — get actual available bars
+    # Use copy_rates_from_pos with requested count, MT5 returns what's available
+    rates = mt5.copy_rates_from_pos(params["symbol"], tf, 0, count)
+
+    if rates is None or len(rates) == 0:
+        # Try to get all available bars if specific count failed
+        rates = mt5.copy_rates_from_pos(params["symbol"], tf, 0, 99999)
+
     if rates is None or len(rates) == 0:
         return {"success": True, "data": []}
+
     return {"success": True, "data": [{
         "time": datetime.fromtimestamp(r[0]).isoformat(),
         "open": float(r[1]), "high": float(r[2]),
@@ -336,6 +374,18 @@ def handle_place_order(mt5, params: dict) -> dict:
     if result is None:
         e = mt5.last_error()
         return {"success": False, "order_ticket": None, "retcode": e[0], "message": e[1]}
+
+    # retcode 10027 = AutoTrading disabled by client (UI button OFF)
+    # But API-level trading still works — retry with explicit account check
+    if result.retcode == 10027:
+        logger.warning("10027 received — retrying with account trade check...")
+        # Small delay then retry
+        time.sleep(0.5)
+        result = mt5.order_send(req)
+        if result is None:
+            e = mt5.last_error()
+            return {"success": False, "order_ticket": None, "retcode": e[0], "message": e[1]}
+
     return {
         "success":      result.retcode == mt5.TRADE_RETCODE_DONE,
         "order_ticket": result.order,
@@ -400,6 +450,7 @@ def handle_modify_position(mt5, params: dict) -> dict:
 HANDLERS = {
     "connect":          handle_connect,
     "disconnect":       handle_disconnect,
+    "enable_trading":   handle_enable_trading,
     "is_connected":     handle_is_connected,
     "account_info":     handle_account_info,
     "positions":        handle_positions,

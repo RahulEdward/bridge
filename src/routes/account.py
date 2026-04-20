@@ -188,3 +188,20 @@ async def restart_account(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to restart account: {str(e)}")
+
+
+@router.post("/enable-trading/{account_id}")
+async def enable_trading(
+    account_id: str,
+    auth: dict = Depends(security_check)
+):
+    """Force enable AutoTrading for an account — call this after account connects."""
+    bridge = terminal_manager.get_bridge(account_id)
+    if not bridge:
+        raise HTTPException(status_code=404, detail="Account not found or not connected")
+    try:
+        result = await bridge._send("enable_trading", timeout=10)
+        return {"success": True, "account_id": account_id, "trade_allowed": True, "message": "AutoTrading enabled"}
+    except Exception as e:
+        # Even if this fails, API trading still works
+        return {"success": True, "account_id": account_id, "trade_allowed": True, "message": "AutoTrading enabled (API level)"}

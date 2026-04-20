@@ -127,7 +127,7 @@ class CandlesRequest(BaseModel):
     account_id: str
     symbol: str
     timeframe: TimeFrame
-    count: int = Field(default=100, ge=1, le=1000)
+    count: int = Field(default=100, ge=1)  # No upper limit — fetch as much as MT5 has
 
 
 class CandlesResponse(BaseModel):

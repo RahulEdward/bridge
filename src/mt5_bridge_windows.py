@@ -205,6 +205,12 @@ class MT5Bridge:
                 raise ConnectionError(result.get("error", "Unknown error"))
             self._connected = True
             logger.info(f"Connected: {self.account_id}")
+            # Auto-enable AutoTrading after connect
+            try:
+                await self._send("enable_trading", timeout=10)
+                logger.info(f"AutoTrading enabled for {self.account_id}")
+            except Exception as e:
+                logger.warning(f"AutoTrading enable warning: {e}")
             return True
         except Exception as e:
             logger.error(f"Connect failed for {self.account_id}: {e}")

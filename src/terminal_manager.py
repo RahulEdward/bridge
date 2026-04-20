@@ -130,8 +130,14 @@ class MT5TerminalManager:
         server: str,
         investor_mode: bool = False
     ) -> MT5Connection:
+        # Check duplicate account_id
         if account_id in self._accounts:
-            raise ValueError(f"Account {account_id} already exists")
+            raise ValueError(f"Account ID '{account_id}' already exists")
+
+        # Check duplicate login+server combination
+        for existing in self._accounts.values():
+            if existing.login == login and existing.server == server:
+                raise ValueError(f"Login {login} on server '{server}' is already connected as '{existing.account_id}'")
         
         terminal_path = os.path.join(settings.mt5_base_path, f"MT5_{account_id}")
         

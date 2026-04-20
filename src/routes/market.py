@@ -15,7 +15,7 @@ async def get_candles(
     account_id: str,
     symbol: str = Query(..., description="Trading symbol (e.g., EURUSD)"),
     timeframe: TimeFrame = Query(TimeFrame.H1, description="Candle timeframe"),
-    count: int = Query(100, ge=1, le=1000, description="Number of candles"),
+    count: int = Query(100, ge=1, description="Number of candles — no upper limit, fetch all available"),
     auth: dict = Depends(security_check)
 ):
     bridge = terminal_manager.get_bridge(account_id)
