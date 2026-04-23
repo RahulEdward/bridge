@@ -7,7 +7,8 @@ from fastapi.responses import FileResponse
 
 from src.config import settings, validate_production_settings
 from src.terminal_manager import terminal_manager
-from src.routes import health, account, market, trade, websocket
+from src.routes import health, account, market, trade, websocket, gateway
+from src import popup_killer
 
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
@@ -23,11 +24,13 @@ async def lifespan(app: FastAPI):
     logger.info("Starting MT5 Execution Gateway...")
     await terminal_manager.start()
     websocket.manager.start_broadcast_loop()
+    popup_killer.start()
     logger.info("Gateway started successfully")
     
     yield
     
     logger.info("Shutting down MT5 Execution Gateway...")
+    popup_killer.stop()
     websocket.manager.stop_broadcast_loop()
     await terminal_manager.stop()
     logger.info("Gateway shutdown complete")
@@ -53,6 +56,7 @@ app.include_router(account.router)
 app.include_router(market.router)
 app.include_router(trade.router)
 app.include_router(websocket.router)
+app.include_router(gateway.router)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

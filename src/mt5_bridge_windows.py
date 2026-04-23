@@ -66,6 +66,8 @@ class MT5Bridge:
             "NewsEnable=0\n"
             "ProxyEnable=0\n"
             "ExpertAdvisors=1\n"
+            "DLLsAllowed=1\n"
+            "AutoTrading=1\n"
         )
 
         # Write to instance config dir

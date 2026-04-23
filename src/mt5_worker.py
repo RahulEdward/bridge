@@ -55,7 +55,7 @@ def _enable_autotrading(mt5):
 
 
 def _write_expert_advisors(mt5):
-    """Write ExpertAdvisors=1 to all MT5 config files."""
+    """Write ExpertAdvisors=1 and DLLsAllowed=1 to all MT5 config files."""
     try:
         # Get data_path from terminal_info if available
         paths_to_update = []
@@ -77,26 +77,36 @@ def _write_expert_advisors(mt5):
                 if os.path.exists(ini) and ini not in paths_to_update:
                     paths_to_update.append(ini)
 
+        settings_to_write = {"ExpertAdvisors": "1", "DLLsAllowed": "1"}
+
         for ini_path in paths_to_update:
             lines = []
-            found = False
+            found_keys = set()
             with open(ini_path, "r") as f:
                 for line in f:
-                    if line.strip().startswith("ExpertAdvisors="):
-                        lines.append("ExpertAdvisors=1\n")
-                        found = True
+                    key_match = None
+                    for key in settings_to_write:
+                        if line.strip().startswith(f"{key}="):
+                            key_match = key
+                            break
+                    if key_match:
+                        lines.append(f"{key_match}={settings_to_write[key_match]}\n")
+                        found_keys.add(key_match)
                     else:
                         lines.append(line)
-            if not found:
+            # Add missing keys after [Common]
+            missing = set(settings_to_write.keys()) - found_keys
+            if missing:
                 new_lines = []
                 for line in lines:
                     new_lines.append(line)
                     if line.strip() == "[Common]":
-                        new_lines.append("ExpertAdvisors=1\n")
+                        for key in missing:
+                            new_lines.append(f"{key}={settings_to_write[key]}\n")
                 lines = new_lines
             with open(ini_path, "w") as f:
                 f.writelines(lines)
-            logger.info(f"ExpertAdvisors=1 written: {ini_path}")
+            logger.info(f"Config written: {ini_path} ({', '.join(settings_to_write.keys())})")
 
     except Exception as e:
         logger.warning(f"_write_expert_advisors: {e}")
@@ -376,15 +386,31 @@ def handle_place_order(mt5, params: dict) -> dict:
         return {"success": False, "order_ticket": None, "retcode": e[0], "message": e[1]}
 
     # retcode 10027 = AutoTrading disabled by client (UI button OFF)
-    # But API-level trading still works — retry with explicit account check
+    # Fix: write ExpertAdvisors=1, shutdown, re-init, then retry order
     if result.retcode == 10027:
-        logger.warning("10027 received — retrying with account trade check...")
-        # Small delay then retry
-        time.sleep(0.5)
-        result = mt5.order_send(req)
-        if result is None:
-            e = mt5.last_error()
-            return {"success": False, "order_ticket": None, "retcode": e[0], "message": e[1]}
+        logger.warning("10027 received — AutoTrading OFF, attempting config fix + restart...")
+        _write_expert_advisors(mt5)
+        mt5.shutdown()
+        time.sleep(2)
+        # Re-initialize terminal with AutoTrading config applied
+        for reinit_attempt in range(1, 4):
+            if mt5.initialize(path=params.get("_terminal_path", ""), login=0, timeout=30000):
+                break
+            time.sleep(3)
+        # Retry order up to 3 times
+        for retry in range(1, 4):
+            time.sleep(0.5)
+            # Re-fetch price since terminal restarted
+            tick = mt5.symbol_info_tick(symbol)
+            if tick:
+                req["price"] = tick.ask if order_type == "buy" else tick.bid
+            result = mt5.order_send(req)
+            if result is None:
+                e = mt5.last_error()
+                return {"success": False, "order_ticket": None, "retcode": e[0], "message": e[1]}
+            if result.retcode != 10027:
+                break
+            logger.warning(f"10027 retry {retry}/3...")
 
     return {
         "success":      result.retcode == mt5.TRADE_RETCODE_DONE,

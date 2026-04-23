@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     
     encryption_key: str = Field(default="", description="Fernet encryption key for credentials")
     
-    mt5_base_path: str = Field(default="C:\\MT5Terminals", description="Base path for MT5 installations")
+    mt5_base_path: str = Field(default="C:\\MT5_INSTANCES", description="Base path for per-user MT5 instances")
     mt5_template_path: str = Field(default="C:\\MT5Template", description="Path to MT5 template installation")
     
     health_check_interval: int = 30

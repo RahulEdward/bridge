@@ -1,29 +1,63 @@
 You are an expert full-stack developer. I have a running MT5 Execution Gateway on a Windows VPS that controls MetaTrader 5 trading accounts via REST API. Integrate this gateway into my app completely.
 
 Gateway Base URL: http://<VPS_IP>:5000
-Auth Header: X-API-Key: test-api-key-12345
+Auth Header: X-API-Key: <YOUR_API_KEY>
 
-API Endpoints:
+=== GATEWAY ENDPOINTS (High-Level — Use these for SaaS integration) ===
 
-GET  /health                              → gateway status (no auth)
-GET  /account/info/{account_id}           → balance, equity, margin, currency, leverage
-GET  /account/positions/{account_id}      → open positions
-GET  /account/orders/{account_id}         → pending orders
-GET  /account/status/{account_id}         → connection status (connected/starting/error)
-POST /account/create                      → add new MT5 account
-POST /account/restart/{account_id}        → restart account
-POST /account/stop/{account_id}           → stop account
-POST /trade/place                         → place order
-POST /trade/close                         → close position
-POST /trade/modify                        → modify SL/TP
-GET  /market/candles/{account_id}?symbol=EURUSD&timeframe=H1&count=100
-GET  /market/ticks/{account_id}?symbol=EURUSD
-WS   /ws/{account_id}?api_key=test-api-key-12345  → real-time updates
+POST /gateway/connect_mt5          → Connect user's MT5 account (creates instance, logs in, enables AutoTrading)
+POST /gateway/start_trading        → Activate trading engine with risk params
+POST /gateway/stop_trading         → Stop trading engine (optionally close all positions)
+GET  /gateway/status/{user_id}     → Full status: connection + engine + account info
+POST /gateway/buy                  → Quick buy order
+POST /gateway/sell                 → Quick sell order
+GET  /gateway/positions/{user_id}  → Open positions
+GET  /gateway/balance/{user_id}    → Balance/equity
+POST /gateway/disconnect/{user_id} → Disconnect user
 
-Request/Response examples:
+=== ACCOUNT ENDPOINTS (Low-Level) ===
 
-POST /account/create body:
-{"account_id":"user_123","broker_server":"MetaQuotes-Demo","login":12345678,"password":"pass","investor_mode":false}
+POST /account/create               → Add new MT5 account
+GET  /account/status/{id}          → Connection status
+GET  /account/info/{id}            → Balance, equity, margin, currency, leverage
+GET  /account/positions/{id}       → Open positions list
+GET  /account/orders/{id}          → Pending orders list
+POST /account/start/{id}           → Start account
+POST /account/stop/{id}            → Stop account
+POST /account/restart/{id}         → Restart account
+POST /account/enable-trading/{id}  → Force enable AutoTrading
+
+=== TRADING ENDPOINTS ===
+
+POST /trade/place                  → Place order
+POST /trade/close                  → Close position
+POST /trade/modify                 → Modify SL/TP
+
+=== MARKET DATA ===
+
+GET  /market/candles/{id}?symbol=EURUSD&timeframe=H1&count=100
+GET  /market/ticks/{id}?symbol=EURUSD
+
+=== WEBSOCKET ===
+
+WS   /ws/{account_id}?api_key=<API_KEY>  → Real-time updates
+
+=== REQUEST/RESPONSE EXAMPLES ===
+
+POST /gateway/connect_mt5 body:
+{"user_id":"user_123","login":12345678,"password":"pass","server":"ICMarkets-Demo","investor_mode":false}
+
+POST /gateway/start_trading body:
+{"user_id":"user_123","max_positions":20,"max_volume_per_trade":10.0,"max_drawdown_percent":30.0}
+
+POST /gateway/buy body:
+{"user_id":"user_123","symbol":"EURUSD","volume":0.01,"sl":1.0800,"tp":1.0950,"comment":"SaaS trade"}
+
+POST /gateway/sell body:
+{"user_id":"user_123","symbol":"EURUSD","volume":0.01,"sl":1.0950,"tp":1.0800,"comment":"SaaS trade"}
+
+POST /gateway/stop_trading body:
+{"user_id":"user_123","close_all_positions":true}
 
 POST /trade/place body:
 {"account_id":"user_123","symbol":"EURUSD","order_type":"buy","volume":0.01,"sl":null,"tp":null}
@@ -35,8 +69,18 @@ POST /trade/close body:
 POST /trade/modify body:
 {"account_id":"user_123","ticket":123456789,"sl":1.0800,"tp":1.0950}
 
+GET /gateway/status/user_123 response:
+{
+  "user_id": "user_123",
+  "connection": {"status":"connected","login":12345678,"server":"ICMarkets-Demo","restart_count":0},
+  "trading_engine": {"is_active":true,"trades_executed":15,"max_positions":20},
+  "account": {"balance":10000,"equity":10250,"margin":500,"free_margin":9750,"currency":"USD","leverage":100,"open_positions":2}
+}
+
 WebSocket server sends every second:
 {"type":"account_update","data":{"balance":10000,"equity":10250,"margin":500,"free_margin":9750,"positions_count":2}}
+
+=== INSTRUCTIONS ===
 
 Now do the following for my app:
 
@@ -46,8 +90,9 @@ Now do the following for my app:
 4. Create a dashboard showing: account balance, equity, open positions table with close button
 5. Create a trade form: symbol input, buy/sell buttons, volume, SL, TP
 6. Add real-time balance/equity updates via WebSocket
-7. Add account management: add new account form, show all accounts with status badges
+7. Add account management: connect MT5 form, show status, disconnect
 8. Handle all error states: loading, error, disconnected
+9. Add risk parameter configuration (max positions, max volume, max drawdown)
 
 My app stack: [WRITE YOUR STACK HERE — e.g. Next.js 14 App Router TypeScript / FastAPI Python]
 

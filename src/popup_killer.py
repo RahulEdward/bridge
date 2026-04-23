@@ -23,6 +23,10 @@ POPUP_TITLES = [
     "trading account login",
     "sign in",
     "new account",
+    "welcome to",
+    "update",
+    "restart",
+    "live update",
 ]
 
 
